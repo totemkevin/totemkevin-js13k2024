@@ -1,0 +1,13 @@
+{
+  "name": "js13k2024",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "minify": "minify index.html > output/index.html",
+    "zip": "sh script/measure.sh output/index.html"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
