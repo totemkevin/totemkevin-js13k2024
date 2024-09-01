@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "minify": "minify index.html > dist/index.html",
-    "zip": "sh script/measure.sh output/index.html",
+    "zip": "sh script/measure.sh dist/index.html",
     "deploy": "gh-pages -d dist"
   },
   "author": "",

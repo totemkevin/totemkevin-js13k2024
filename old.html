@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html>
+  <style type="text/css">
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #game {
+      display: inline-block;
+      display: flex;
+      flex-direction: row;
+      gap: 5px;
+    }
+    .panel {
+      border-radius: 10px;
+    }
+    #field {
+      padding: 10px;
+      background: green;
+      display: inline-block;
+    }
+    #board {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .fieldCell {
+      width: 40px;
+      height: 40px;
+      background: yellowgreen;
+      border-radius: 2px;
+      font-size: 15px;
+      color: white;
+      align-items: center; /* 垂直居中 */
+      justify-content: center; /* 水平居中 */
+    }
+    .fieldCell:hover {
+      box-shadow: inset 0 0 0 2px #000;
+    }
+    .fieldCellRow {
+      display: flex;
+      flex-direction: row;
+      gap: 2px;
+    }
+    .fieldCellCol {
+      display: flex;
+    }
+    #control {
+      width: 200px;
+      flex: 1;
+      background: green;
+      padding: 10px;
+      gap: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    #debug {
+      width: 500px;
+      height: 500px;
+      border: 2px solid black;
+      white-space: pre-wrap;
+      overflow-y: auto; /* 垂直滚动条 */
+    }
+    #info {
+      flex: 1;
+      padding: 10px;
+      background: yellowgreen;
+      gap: 10px;
+    }
+    #showLevel {
+      width: auto;
+      height: 50px;
+      display: flex;
+      align-items: center; /* 垂直居中 */
+      justify-content: center; /* 水平居中 */
+    }
+    #next {
+      width: auto;
+      height: 50px;
+    }
+    .btn {
+      border: 2px solid black;
+      padding: auto;
+      display: flex;
+      align-items: center; /* 垂直居中 */
+      justify-content: center; /* 水平居中 */
+      background: yellowgreen;
+    }
+    .btn:hover {
+      background: green;
+    }
+    .selectedBtn {
+      border: 2px solid black;
+      padding: auto;
+      display: none;
+      align-items: center; /* 垂直居中 */
+      justify-content: center; /* 水平居中 */
+      background: yellowgreen;
+      margin-top: 10px;
+    }
+    .selectedBtn:hover {
+      background: green;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: bold;
+    }
+  </style>
+  <body>
+    <div id="game">
+      <div id="field" class="panel">
+        <div id="board"></div>
+      </div>
+      <div id="control" class="panel">
+        <div id="info" class="panel">
+          <div class="title">Infomation</div>
+          <div>Day:</div>
+          <div>Energy:</div>
+          <div>Bio resource:</div>
+          <div>Mineral resource:</div>
+          <div class="title">Selected</div>
+          <div>Position:</div>
+          <div>Type:</div>
+          <div class="title">Actions</div>
+          <div id="search" class="panel selectedBtn" onclick="search(event)">
+            search
+          </div>
+          <div id="build" class="panel selectedBtn" onclick="build(event)">
+            build
+          </div>
+          <div id="deploy" class="panel selectedBtn" onclick="deploy(event)">
+            deploy
+          </div>
+        </div>
+        <div id="showLevel" class="panel btn" onclick="showLevel(event)">
+          Show Level: OFF
+        </div>
+        <div id="next" class="panel btn">End Turn</div>
+      </div>
+      <div id="debug" class="panel"></div>
+    </div>
+  </body>
+  <script>
+    const BOARD_ROW = 16;
+    const BOARD_COL = 16;
+    let showLabe = false;
+    const IS_FOG = true;
+
+    const boardDiv = document.getElementById('board');
+    const controlDiv = document.getElementById('control');
+    const debugDiv = document.getElementById('debug');
+    const cells = document.getElementsByClassName('fieldCell');
+    const searchDiv = document.getElementById('search');
+    const buildDiv = document.getElementById('build');
+    const deployDiv = document.getElementById('deploy');
+    let fieldData = [];
+    let gameData = {
+      selected: { position: [14, 14] },
+    };
+    const pollutionPosition = [
+      [1, 1],
+      [2, 3],
+      [3, 3],
+      [4, 2],
+      [5, 10],
+      [3, 10],
+      [15, 4],
+      [12, 10],
+      [14, 3],
+      [2, 14],
+      [10, 4],
+      [6, 12],
+    ];
+    const playerBaseSetting = [[14, 14]];
+
+    initFieldData();
+    setPollution(2);
+    setPlayerBase();
+    setTreeAndRock();
+    renderDiffusion();
+    generateField(fieldData);
+
+    Array.from(cells).forEach((element) => {
+      element.addEventListener('click', handleClick);
+      element.addEventListener('mouseover', handleMouseover);
+      element.addEventListener('mouseout', handleMouseout);
+    });
+
+    function handleClick(event) {
+      const target = event.target;
+      const position = splitId(target.id);
+      selectAction(position);
+      debugMessage();
+    }
+    function handleMouseover(event) {
+      const target = event.target;
+      const position = splitId(target.id);
+      hoverAction(position);
+      debugMessage();
+    }
+    function handleMouseout(event) {
+      const target = event.target;
+    }
+
+    function selectAction(position) {
+      const field = fieldData[position[0]][position[1]];
+      gameData.selected = { position, data: field };
+      if (field.isFog) {
+        searchDiv.style.display = 'flex';
+        deployDiv.style.display = 'none';
+        buildDiv.style.display = 'none';
+      } else {
+        if (
+          field.type === 'tree' ||
+          field.type === 'mine' ||
+          field.type === 'pollution'
+        ) {
+          searchDiv.style.display = 'none';
+          deployDiv.style.display = 'none';
+          buildDiv.style.display = 'flex';
+        } else {
+          searchDiv.style.display = 'none';
+          deployDiv.style.display = 'flex';
+          buildDiv.style.display = 'none';
+        }
+      }
+    }
+
+    function hoverAction(position) {}
+
+    function search() {
+      const pos = gameData.selected.position;
+      recusiveSearch(pos);
+      reDraw();
+    }
+
+    function recusiveSearch(pos) {
+      const field = fieldData[pos[0]][pos[1]];
+      if (field.isFog) {
+        field.isFog = false;
+      } else {
+        return;
+      }
+      if (field.type === 'wasteland') {
+        const aroundPos = around(pos);
+        aroundPos.forEach((pos) => {
+          recusiveSearch(pos);
+        });
+      } else if (field.type === 'tree' || field.type === 'mine') {
+        const aroundPos = around(pos, field[field.type].level - 1);
+        aroundPos.forEach((pos) => {
+          const field = fieldData[pos[0]][pos[1]];
+          if (field.pollute.level === 0) {
+            recusiveSearch(pos);
+          }
+        });
+      } else if (field.type === 'pollution') {
+        const aroundPos = around(pos, field.pollution.level - 1);
+        aroundPos.forEach((pos) => {
+          const field = fieldData[pos[0]][pos[1]];
+          recusiveSearch(pos);
+        });
+      } else {
+        return;
+      }
+    }
+
+    function renderDiffusion() {
+      for (let i = 0; i < BOARD_ROW; i++) {
+        for (let j = 0; j < BOARD_COL; j++) {
+          const target = fieldData[i][j];
+          if (target.type === 'pollution') {
+            diffusion(i, j, target.pollution.level, (pos) => {
+              const target = fieldData[pos[0]][pos[1]];
+              target.pollute.level++;
+            });
+          }
+          if (target.type === 'tree') {
+            diffusion(i, j, target.tree.level, (pos) => {
+              const target = fieldData[pos[0]][pos[1]];
+              target.bio.level++;
+            });
+          }
+          if (target.type === 'mine') {
+            diffusion(i, j, target.mine.level, (pos) => {
+              const target = fieldData[pos[0]][pos[1]];
+              target.mineral.level++;
+            });
+          }
+        }
+      }
+    }
+
+    function diffusion(x, y, level, action) {
+      for (let lv = level - 1; lv > 0; lv--) {
+        const pollutedPos = around([x, y], lv);
+        pollutedPos.forEach((pos) => {
+          action(pos);
+        });
+      }
+    }
+
+    function setPollution(level = 1) {
+      pollutionPosition.forEach((pos) => {
+        fieldData[pos[0]][pos[1]].type = 'pollution';
+        fieldData[pos[0]][pos[1]].pollution = {
+          level,
+        };
+      });
+    }
+
+    function setPlayerBase() {
+      playerBaseSetting.forEach((pos) => {
+        fieldData[pos[0]][pos[1]].type = 'base';
+        fieldData[pos[0]][pos[1]].isFog = false;
+      });
+    }
+    function around(pos, range = 1) {
+      const start = range * -1;
+      const end = range;
+      const maxX = BOARD_ROW;
+      const maxY = BOARD_COL;
+      const res = [];
+      for (let i = start; i <= end; i++) {
+        const posX = pos[0] + i;
+        for (let j = start; j <= end; j++) {
+          const posY = pos[1] + j;
+          if (posX >= 0 && posX < maxX && posY >= 0 && posY < maxY) {
+            res.push([posX, posY]);
+          }
+        }
+      }
+      return res;
+    }
+    function setTreeAndRock() {
+      const treeCount = 10;
+      const rockCount = 5;
+
+      const defaultTreePos = [[10, 14]];
+
+      defaultTreePos.forEach((pos) => {
+        fieldData[pos[0]][pos[1]].type = 'tree';
+        fieldData[pos[0]][pos[1]].tree = { level: 3 };
+      });
+
+      const randonTreePos = renderPos(treeCount);
+      randonTreePos.forEach((pos) => {
+        fieldData[pos[0]][pos[1]].type = 'tree';
+        fieldData[pos[0]][pos[1]].tree = { level: 2 };
+      });
+      const randonRockePos = renderPos(rockCount);
+      randonRockePos.forEach((pos) => {
+        fieldData[pos[0]][pos[1]].type = 'mine';
+        fieldData[pos[0]][pos[1]].mine = { level: 2 };
+      });
+    }
+
+    function renderPos(num) {
+      const arr = [];
+      let gen = 0;
+      while (gen < num) {
+        const posX = Math.floor(Math.random() * BOARD_ROW);
+        const posY = Math.floor(Math.random() * BOARD_COL);
+        const posStr = `${posX},${posY}`;
+        const target = fieldData[posX][posY];
+        if (target.type === 'wasteland' && !arr.includes(posStr)) {
+          arr.push(posStr);
+          gen++;
+        }
+      }
+      const res = arr.map((posstr) => {
+        return posstr.split(',');
+      });
+      return res;
+    }
+
+    function initFieldData() {
+      for (let i = 0; i < BOARD_ROW; i++) {
+        const row = [];
+        for (let j = 0; j < BOARD_COL; j++) {
+          row.push({
+            name: `fieldCell_${i}_${j}`,
+            type: 'wasteland',
+            isFog: true,
+            pollute: { level: 0 },
+            bio: { level: 0 },
+            mineral: { level: 0 },
+          });
+        }
+        fieldData.push(row);
+      }
+    }
+    function generateField(fieldData) {
+      for (let i = 0; i < fieldData.length; i++) {
+        const row = fieldData[i];
+        const newDivRow = document.createElement('div');
+        newDivRow.classList.add('fieldCellRow');
+        for (let j = 0; j < row.length; j++) {
+          const col = row[j];
+
+          const newDivCol = document.createElement('div');
+          newDivCol.id = col.name;
+          newDivCol.classList.add('fieldCell');
+          newDivCol.classList.add('fieldCellCol');
+          drawField(col, newDivCol);
+          newDivRow.appendChild(newDivCol);
+        }
+        boardDiv.appendChild(newDivRow);
+      }
+    }
+    function reDraw() {
+      for (let i = 0; i < BOARD_ROW; i++) {
+        for (let j = 0; j < BOARD_COL; j++) {
+          const cell = fieldData[i][j];
+          const element = document.getElementById(fieldData[i][j].name);
+          drawField(cell, element);
+        }
+      }
+    }
+    function drawField(cell, element) {
+      const type = cell.type;
+      switch (type) {
+        case 'pollution':
+          element.style.background = 'black';
+          if (showLabe && !cell.isFog) {
+            element.innerHTML = cell.pollution.level;
+          } else {
+            element.innerHTML = '';
+          }
+          break;
+        case 'base':
+          element.style.background = 'red';
+          break;
+        case 'tree':
+          element.style.background = 'green';
+          if (showLabe && !cell.isFog) {
+            element.innerHTML = cell.tree.level;
+          } else {
+            element.innerHTML = '';
+          }
+          break;
+        case 'mine':
+          element.style.background = 'gray';
+          if (showLabe && !cell.isFog) {
+            element.innerHTML = cell.mine.level;
+          } else {
+            element.innerHTML = '';
+          }
+          break;
+        default:
+          if (cell.pollute.level > 0) {
+            cell.type = 'pollute';
+            element.style.background = purpleLevel(cell.pollute.level);
+            if (showLabe && !cell.isFog) {
+              element.innerHTML = cell.pollute.level;
+            } else {
+              element.innerHTML = '';
+            }
+          } else if (cell.bio.level > 0) {
+            cell.type = 'grass';
+            element.style.background = 'yellowgreen';
+            if (showLabe && !cell.isFog) {
+              element.innerHTML = cell.bio.level;
+            } else {
+              element.innerHTML = '';
+            }
+          } else if (cell.mineral.level > 0) {
+            cell.type = 'rock';
+            element.style.background = 'darkgrey';
+            if (showLabe && !cell.isFog) {
+              element.innerHTML = cell.mineral.level;
+            } else {
+              element.innerHTML = '';
+            }
+          } else {
+            cell.type = 'wasteland';
+            element.style.background = 'burlywood';
+          }
+      }
+      if (IS_FOG && cell.isFog) {
+        element.style.background = 'blue';
+        return;
+      }
+    }
+    function purpleLevel(level) {
+      if (level <= 1) {
+        return 'rgb(186,85,255)';
+      } else if (level <= 2) {
+        return 'rgb(162,25,255)';
+      } else if (level <= 4) {
+        return 'rgb(119,0,200)';
+      } else if (level <= 8) {
+        return 'rgb(95,0,160)';
+      } else {
+        return 'rgb(60,0,100)';
+      }
+    }
+    function splitId(idStr) {
+      const arr = idStr.split('_');
+      return [Number(arr[1]), Number(arr[2])];
+    }
+    function debugMessage() {
+      const dabugMessage = {
+        gameData,
+        showData: showData(),
+      };
+      debugDiv.innerHTML = JSON.stringify(dabugMessage, null, 2);
+    }
+    function showData() {
+      const selected = gameData.selected.position;
+      const res = {
+        pollution: 0,
+        pollute: 0,
+        tree: 0,
+        mine: 0,
+        selectedData: fieldData[selected[0]][selected[1]],
+      };
+      for (let i = 0; i < BOARD_ROW; i++) {
+        for (let j = 0; j < BOARD_COL; j++) {
+          const cell = fieldData[i][j];
+          if (cell.type === 'pollution') {
+            res.pollution++;
+          } else if (cell.type === 'pollute') {
+            res.pollute++;
+          } else if (cell.type === 'tree') {
+            res.tree++;
+          } else if (cell.type === 'mine') {
+            res.mine++;
+          }
+        }
+      }
+      return res;
+    }
+    function showLevel(e) {
+      showLabe = !showLabe;
+      e.target.innerHTML = `Show Level: ${showLabe ? 'ON' : 'OFF'}`;
+      reDraw();
+    }
+  </script>
+</html>
